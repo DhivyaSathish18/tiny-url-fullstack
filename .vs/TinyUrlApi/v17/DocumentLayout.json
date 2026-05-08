@@ -1,0 +1,41 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\dell\\source\\repos\\TinyUrlApi\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{1ECEC3D9-8631-4450-93FC-C4C80F9E8C67}|TinyUrlApi\\TinyUrlApi.csproj|c:\\users\\dell\\source\\repos\\tinyurlapi\\tinyurlapi\\.gitignore||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{1ECEC3D9-8631-4450-93FC-C4C80F9E8C67}|TinyUrlApi\\TinyUrlApi.csproj|solutionrelative:tinyurlapi\\.gitignore||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": ".gitignore",
+              "DocumentMoniker": "C:\\Users\\dell\\source\\repos\\TinyUrlApi\\TinyUrlApi\\.gitignore",
+              "RelativeDocumentMoniker": "TinyUrlApi\\.gitignore",
+              "ToolTip": "C:\\Users\\dell\\source\\repos\\TinyUrlApi\\TinyUrlApi\\.gitignore",
+              "RelativeToolTip": "TinyUrlApi\\.gitignore",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAQAAAAcAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-05-08T05:47:10.727Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

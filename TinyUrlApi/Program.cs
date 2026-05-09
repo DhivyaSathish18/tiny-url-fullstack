@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using System;
 using TinyUrlApi.Data;
 using TinyUrlApi.DTOs;
 using TinyUrlApi.Helpers;
@@ -11,11 +13,23 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 
 builder.Services.AddDbContext<AppDBContext>(options => options.UseSqlite("Data Source = tinyurl.db"));
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAngular",
+        policy =>
+        {
+            policy
+                .WithOrigins("http://localhost:4200")
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        });
+});
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+app.UseCors("AllowAngular");
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -47,7 +61,7 @@ app.MapGet("/api/urls", async (AppDBContext db) =>
 {
     return await db.ShortUrls.Where(s => !s.IsPrivate).ToListAsync();
 });
-app.MapGet("/{code}", async (string code, AppDBContext db) =>
+app.MapGet("/api/{code}", async (string code, AppDBContext db) =>
 {
 var url = await db.ShortUrls.FirstOrDefaultAsync(s => s.ShortCode == code);
     if (url == null)
@@ -56,8 +70,35 @@ var url = await db.ShortUrls.FirstOrDefaultAsync(s => s.ShortCode == code);
     }
         url.Clicks++;
         await db.SaveChangesAsync();
-        return Results.Redirect(url.OriginalUrl);
+        return Results.Ok(url);
     
+});
+app.MapGet("/{code}", async (
+    string code,
+    AppDBContext db) =>
+{
+    var url = await db.ShortUrls
+        .FirstOrDefaultAsync(x => x.ShortCode == code);
+
+    if (url == null)
+        return Results.NotFound();
+
+    // Increment clicks
+    url.Clicks++;
+
+    await db.SaveChangesAsync();
+
+    var originalUrl = url.OriginalUrl;
+
+    // Add https if missing
+    if (!originalUrl.StartsWith("http://") &&
+        !originalUrl.StartsWith("https://"))
+    {
+        originalUrl = "https://" + originalUrl;
+    }
+
+    // Redirect
+    return Results.Redirect(originalUrl);
 });
 app.MapDelete("/api/{id}", async (int id, AppDBContext db) =>
 {
@@ -72,8 +113,9 @@ app.MapDelete("/api/{id}", async (int id, AppDBContext db) =>
 });
 
 app.MapGet("/api/search", async (string query, AppDBContext db) =>
-{
-    return await db.ShortUrls.Where(s => s.ShortCode.Contains(query)).ToListAsync();
+{ 
+    var results = await db.ShortUrls.Where(s => s.ShortCode.Contains(query) || s.OriginalUrl.Contains(query)).ToListAsync();
+    return Results.Ok(results);
 });
 
 app.UseHttpsRedirection();

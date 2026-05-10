@@ -12,14 +12,17 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-builder.Services.AddDbContext<AppDBContext>(options => options.UseSqlite("Data Source = tinyurl.db"));
+//builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite("Data Source = tinyurl.db"));
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular",
         policy =>
         {
             policy
-                .WithOrigins("http://localhost:4200")
+                .WithOrigins("http://localhost:4200", "https://proud-desert-0a1d6b900.7.azurestaticapps.net")
                 .AllowAnyHeader()
                 .AllowAnyMethod();
         });
@@ -32,13 +35,13 @@ var app = builder.Build();
 app.UseCors("AllowAngular");
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
+//if (app.Environment.IsDevelopment())
+//{
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+//}
 app.MapPost("/api/shortenUrl",
-    async (CreateShortUrlRequest request, AppDBContext db) =>
+    async (CreateShortUrlRequest request, AppDbContext db) =>
     {
         string code;
         do
@@ -57,11 +60,11 @@ app.MapPost("/api/shortenUrl",
         await db.SaveChangesAsync();
         return Results.Ok(entity);
     });
-app.MapGet("/api/urls", async (AppDBContext db) =>
+app.MapGet("/api/urls", async (AppDbContext db) =>
 {
     return await db.ShortUrls.Where(s => !s.IsPrivate).ToListAsync();
 });
-app.MapGet("/api/{code}", async (string code, AppDBContext db) =>
+app.MapGet("/api/{code}", async (string code, AppDbContext db) =>
 {
 var url = await db.ShortUrls.FirstOrDefaultAsync(s => s.ShortCode == code);
     if (url == null)
@@ -75,7 +78,7 @@ var url = await db.ShortUrls.FirstOrDefaultAsync(s => s.ShortCode == code);
 });
 app.MapGet("/{code}", async (
     string code,
-    AppDBContext db) =>
+    AppDbContext db) =>
 {
     var url = await db.ShortUrls
         .FirstOrDefaultAsync(x => x.ShortCode == code);
@@ -100,7 +103,7 @@ app.MapGet("/{code}", async (
     // Redirect
     return Results.Redirect(originalUrl);
 });
-app.MapDelete("/api/{id}", async (int id, AppDBContext db) =>
+app.MapDelete("/api/{id}", async (int id, AppDbContext db) =>
 {
     var entity = await db.ShortUrls.FindAsync(id);
     if (entity == null)
@@ -112,13 +115,14 @@ app.MapDelete("/api/{id}", async (int id, AppDBContext db) =>
     return Results.Ok();
 });
 
-app.MapGet("/api/search", async (string query, AppDBContext db) =>
+app.MapGet("/api/search", async (string query, AppDbContext db) =>
 { 
     var results = await db.ShortUrls.Where(s => s.ShortCode.Contains(query) || s.OriginalUrl.Contains(query)).ToListAsync();
     return Results.Ok(results);
 });
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
+app.MapGet("/version", () => "Deployment Version 2");
 
 app.UseAuthorization();
 

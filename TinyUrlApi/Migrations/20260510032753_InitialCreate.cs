@@ -15,13 +15,13 @@ namespace TinyUrlApi.Migrations
                 name: "ShortUrls",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    OriginalUrl = table.Column<string>(type: "TEXT", nullable: false),
-                    ShortCode = table.Column<string>(type: "TEXT", nullable: false),
-                    IsPrivate = table.Column<bool>(type: "INTEGER", nullable: false),
-                    Clicks = table.Column<int>(type: "INTEGER", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    OriginalUrl = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ShortCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    IsPrivate = table.Column<bool>(type: "bit", nullable: false),
+                    Clicks = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {

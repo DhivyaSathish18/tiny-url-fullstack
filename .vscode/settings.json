@@ -1,0 +1,4 @@
+{
+    "appService.defaultWebAppToDeploy": "/subscriptions/376b95bd-bfb4-4a8f-affc-4021032b853c/resourceGroups/tinyurl-api_group/providers/Microsoft.Web/sites/tinyurl-api",
+    "appService.deploySubpath": "TinyUrlApi"
+}

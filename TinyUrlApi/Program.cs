@@ -41,8 +41,21 @@ app.UseCors("AllowAngular");
     app.UseSwaggerUI();
 //}
 app.MapPost("/api/shortenUrl",
-    async (CreateShortUrlRequest request, AppDbContext db) =>
+    async (CreateShortUrlRequest request, AppDbContext db, IConfiguration config)=>
     {
+        var masterSecret =
+       config["AppSettings:MasterSecret"];
+
+        var shortSecretCode =
+            Guid.NewGuid().ToString().Substring(0, 6);
+
+        var rawToken =
+            $"{shortSecretCode}-{masterSecret}-{Guid.NewGuid()}";
+
+        var secretToken =
+            Convert.ToBase64String(
+                System.Text.Encoding.UTF8.GetBytes(rawToken));
+
         string code;
         do
         {
@@ -54,7 +67,8 @@ app.MapPost("/api/shortenUrl",
             OriginalUrl = request.OriginalUrl,
             IsPrivate = request.IsPrivate,
             ShortCode = code,
-            CreatedAt = DateTime.UtcNow
+            SecretToken = secretToken,
+            CreatedAt = DateTime.UtcNow,
         };
         db.ShortUrls.Add(entity);
         await db.SaveChangesAsync();
@@ -103,12 +117,16 @@ app.MapGet("/{code}", async (
     // Redirect
     return Results.Redirect(originalUrl);
 });
-app.MapDelete("/api/{id}", async (int id, AppDbContext db) =>
+app.MapDelete("/api/delete/{id}", async (int id, string token, AppDbContext db) =>
 {
     var entity = await db.ShortUrls.FindAsync(id);
     if (entity == null)
     {
         return Results.NotFound();
+    }
+    if (entity.SecretToken != token)
+    {
+        return Results.Unauthorized();
     }
     db.ShortUrls.Remove(entity);
     await db.SaveChangesAsync();

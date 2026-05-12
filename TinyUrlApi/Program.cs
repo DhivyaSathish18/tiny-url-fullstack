@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Threading.RateLimiting;
 using TinyUrlApi.Data;
 using TinyUrlApi.DTOs;
 using TinyUrlApi.Helpers;
@@ -33,6 +35,29 @@ builder.Services.AddSingleton<BlobLoggerService>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = 429;
+
+        await context.HttpContext.Response.WriteAsync(
+            "Too many requests. Please try again later.");
+    }; 
+
+    options.AddFixedWindowLimiter("shortenPolicy", config =>
+    {
+        config.PermitLimit = 5;
+
+        config.Window = TimeSpan.FromMinutes(1);
+
+        config.QueueProcessingOrder =
+            QueueProcessingOrder.OldestFirst;
+
+        config.QueueLimit = 2;
+    });
+});
 
 var app = builder.Build();
 app.UseCors("AllowAngular");
@@ -88,7 +113,8 @@ app.MapPost("/api/shortenUrl",
 
             return Results.Problem();
         }
-    });
+    }).RequireRateLimiting("shortenPolicy");
+
 app.MapGet("/api/urls", async (AppDbContext db) =>
 {
     return await db.ShortUrls.Where(s => !s.IsPrivate).ToListAsync();

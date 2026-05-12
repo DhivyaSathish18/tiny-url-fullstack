@@ -1,10 +1,14 @@
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System;
+using System.Threading.RateLimiting;
 using TinyUrlApi.Data;
 using TinyUrlApi.DTOs;
 using TinyUrlApi.Helpers;
 using TinyUrlApi.Models;
+using TinyUrlApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,9 +31,33 @@ builder.Services.AddCors(options =>
                 .AllowAnyMethod();
         });
 });
+builder.Services.AddSingleton<BlobLoggerService>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = 429;
+
+        await context.HttpContext.Response.WriteAsync(
+            "Too many requests. Please try again later.");
+    }; 
+
+    options.AddFixedWindowLimiter("shortenPolicy", config =>
+    {
+        config.PermitLimit = 5;
+
+        config.Window = TimeSpan.FromMinutes(1);
+
+        config.QueueProcessingOrder =
+            QueueProcessingOrder.OldestFirst;
+
+        config.QueueLimit = 2;
+    });
+});
 
 var app = builder.Build();
 app.UseCors("AllowAngular");
@@ -41,39 +69,52 @@ app.UseCors("AllowAngular");
     app.UseSwaggerUI();
 //}
 app.MapPost("/api/shortenUrl",
-    async (CreateShortUrlRequest request, AppDbContext db, IConfiguration config)=>
+    async (CreateShortUrlRequest request, AppDbContext db, IConfiguration config, BlobLoggerService logger)=>
     {
-        var masterSecret =
-       config["AppSettings:MasterSecret"];
-
-        var shortSecretCode =
-            Guid.NewGuid().ToString().Substring(0, 6);
-
-        var rawToken =
-            $"{shortSecretCode}-{masterSecret}-{Guid.NewGuid()}";
-
-        var secretToken =
-            Convert.ToBase64String(
-                System.Text.Encoding.UTF8.GetBytes(rawToken));
-
-        string code;
-        do
+        try
         {
-            code = ShortCodeGenerator.Generate();
+            var masterSecret =
+           config["AppSettings:MasterSecret"];
+
+            var shortSecretCode =
+                Guid.NewGuid().ToString().Substring(0, 6);
+
+            var rawToken =
+                $"{shortSecretCode}-{masterSecret}-{Guid.NewGuid()}";
+
+            var secretToken =
+                Convert.ToBase64String(
+                    System.Text.Encoding.UTF8.GetBytes(rawToken));
+
+            string code;
+            do
+            {
+                code = ShortCodeGenerator.Generate();
+            }
+            while (await db.ShortUrls.AnyAsync(s => s.ShortCode == code));
+            var entity = new ShortUrl
+            {
+                OriginalUrl = request.OriginalUrl,
+                IsPrivate = request.IsPrivate,
+                ShortCode = code,
+                SecretToken = secretToken,
+                CreatedAt = DateTime.UtcNow,
+            };
+            db.ShortUrls.Add(entity);
+            await db.SaveChangesAsync();
+            await logger.LogAsync(
+                $"Short URL created: {entity.ShortCode}");
+            return Results.Ok(entity);
         }
-        while (await db.ShortUrls.AnyAsync(s => s.ShortCode == code));
-        var entity = new ShortUrl
+        catch (Exception ex)
         {
-            OriginalUrl = request.OriginalUrl,
-            IsPrivate = request.IsPrivate,
-            ShortCode = code,
-            SecretToken = secretToken,
-            CreatedAt = DateTime.UtcNow,
-        };
-        db.ShortUrls.Add(entity);
-        await db.SaveChangesAsync();
-        return Results.Ok(entity);
-    });
+            await logger.LogAsync(
+            $"ERROR: {ex.Message}");
+
+            return Results.Problem();
+        }
+    }).RequireRateLimiting("shortenPolicy");
+
 app.MapGet("/api/urls", async (AppDbContext db) =>
 {
     return await db.ShortUrls.Where(s => !s.IsPrivate).ToListAsync();
@@ -92,17 +133,20 @@ var url = await db.ShortUrls.FirstOrDefaultAsync(s => s.ShortCode == code);
 });
 app.MapGet("/{code}", async (
     string code,
-    AppDbContext db) =>
+    AppDbContext db, BlobLoggerService logger) =>
 {
     var url = await db.ShortUrls
         .FirstOrDefaultAsync(x => x.ShortCode == code);
 
     if (url == null)
+    {
+        await logger.LogAsync($"Invalid shortcode access: {code}");
         return Results.NotFound();
+    }
 
     // Increment clicks
     url.Clicks++;
-
+    await logger.LogAsync($"Redirected shortcode: {code}");
     await db.SaveChangesAsync();
 
     var originalUrl = url.OriginalUrl;
@@ -117,19 +161,22 @@ app.MapGet("/{code}", async (
     // Redirect
     return Results.Redirect(originalUrl);
 });
-app.MapDelete("/api/delete/{id}", async (int id, string token, AppDbContext db) =>
+app.MapDelete("/api/delete/{id}", async (int id, string token, AppDbContext db, BlobLoggerService logger) =>
 {
     var entity = await db.ShortUrls.FindAsync(id);
     if (entity == null)
     {
+        await logger.LogAsync($"Invalid shortcode access: {entity.ShortCode}");
         return Results.NotFound();
     }
     if (entity.SecretToken != token)
     {
+        await logger.LogAsync($"Unauthorized user access to delete {entity.ShortCode}: {entity.Id}");
         return Results.Unauthorized();
     }
     db.ShortUrls.Remove(entity);
     await db.SaveChangesAsync();
+    await logger.LogAsync($"Deleted URL id: {id}");
     return Results.Ok();
 });
 
